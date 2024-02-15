@@ -1,19 +1,10 @@
-## Foundry
+## Requirements
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+```
+git clone <this repo>
+```
 
-Foundry consists of:
-
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
-
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
+foundry
 
 ### Build
 
@@ -21,46 +12,44 @@ https://book.getfoundry.sh/
 $ forge build
 ```
 
+### Test & Coverage
+
+```shell
+forge test
+forge coverage
+```
+
+### Security Analysis
+
+1. [Slither](https://github.com/crytic/slither)
+
+   ```shell
+   slither src/ContractManager.sol --filter-paths /lib
+   ```
+
+2. [Aderyn](https://github.com/Cyfrin/aderyn)
+
+   ```shell
+   aderyn .
+   ```
+
+   It generates [report.md](./report.md) at project root.
+
+3. [Mythril](https://github.com/Consensys/mythril)
+
+   ```shell
+   ❯ myth analyze --solc-json mythril.solc.json src/ContractManager.sol
+   The analysis was completed successfully. No issues were detected.
+   ```
+
+## Documentation
+
+https://book.getfoundry.sh/
+
+## Usage
+
 ### Test
 
 ```shell
 $ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
 ```
