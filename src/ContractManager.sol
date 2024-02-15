@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.20;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
-
 /// @author Jan Kwiatkowski @spaceh3ad
 /// @title Contract Manager for Managing Contract Descriptions
-/// @dev Extends OpenZeppelin's AccessControl for role-based permission management
 /// @notice This contract allows for the addition, updating, and removal of contract descriptions, with access control.
-contract ContractManager is AccessControl {
+contract ContractManager {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -21,6 +18,9 @@ contract ContractManager is AccessControl {
     /// @dev Error used when an attempt is made to update a contract's description to an empty string.
     error CannotSetToEmpty();
 
+    /// @dev Error used when an operation is attempted by an unauthorized user.
+    error NotOwner();
+
     /*//////////////////////////////////////////////////////////////
                                 STORAGE
     //////////////////////////////////////////////////////////////*/
@@ -28,22 +28,19 @@ contract ContractManager is AccessControl {
     /// @dev Maps contract addresses to their descriptions
     mapping(address => string) public contractToDescriptionMaping;
 
-    /// @notice Role hash for the remove operation
-    bytes32 public constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
-
-    /// @notice Role hash for the add operation
-    bytes32 public constant ADD_ROLE = keccak256("ADD_ROLE");
-
-    /// @notice Role hash for the update operation
-    bytes32 public constant UPDATE_ROLE = keccak256("UPDATE_ROLE");
+    address public multisigAmin;
 
     /*//////////////////////////////////////////////////////////////
-                              CONSTRUCTOR
+                        CONSTRUCTOR & MODIFIERS
     //////////////////////////////////////////////////////////////*/
+    modifier onlyMultiSigAdmin() {
+        if (msg.sender == multisigAmin) {
+            _;
+        } else revert NotOwner();
+    }
 
-    /// @dev Grants `DEFAULT_ADMIN_ROLE` to the account that deploys the contract.
-    constructor() {
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    constructor(address _multisigAmin) {
+        multisigAmin = _multisigAmin;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -51,13 +48,13 @@ contract ContractManager is AccessControl {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Updates the description of a contract
-    /// @dev Requires `UPDATE_ROLE`; Reverts if the contract does not exist or if the description is stale
+    /// @dev Only callable via MultiSigAdmin
     /// @param _contract The address of the contract to update
     /// @param _description The new description of the contract
     function updateContractDescription(
         address _contract,
         string memory _description
-    ) external onlyRole(UPDATE_ROLE) {
+    ) external onlyMultiSigAdmin {
         if (bytes(contractToDescriptionMaping[_contract]).length == 0) {
             revert ContractNotExist();
         }
@@ -74,22 +71,22 @@ contract ContractManager is AccessControl {
     }
 
     /// @notice Adds a new contract description
-    /// @dev Requires `ADD_ROLE`
+    /// @dev Only callable via MultiSigAdmin
     /// @param _contract The address of the contract
     /// @param _description The description of the contract
     function addContractDescription(
         address _contract,
         string memory _description
-    ) external onlyRole(ADD_ROLE) {
+    ) external onlyMultiSigAdmin {
         _insertContractDescription(_contract, _description);
     }
 
     /// @notice Removes a contract description
-    /// @dev Requires `REMOVE_ROLE`
+    /// @dev Only callable via MultiSigAdmin
     /// @param _contract The address of the contract to remove
     function removeContractDescription(
         address _contract
-    ) external onlyRole(REMOVE_ROLE) {
+    ) external onlyMultiSigAdmin {
         delete contractToDescriptionMaping[_contract];
     }
 
