@@ -12,6 +12,9 @@ contract ContractManager {
     /// @dev Error used when an operation references a contract address that does not exist in the mapping.
     error ContractNotExist();
 
+    /// @dev Error used when an attempt is made to set the owner to the zero address.
+    error CannotBeZeroAddress();
+
     /// @dev Error used when an attempt is made to update a contract's description to the same description it already has.
     error StaleDescription();
 
@@ -46,28 +49,28 @@ contract ContractManager {
     mapping(address => string) public contractToDescriptionMaping;
 
     /// @notice The owner of the contract which is allowed to interact with contract.
-    address public owner;
+    address public immutable owner;
 
     /*//////////////////////////////////////////////////////////////
                         CONSTRUCTOR & MODIFIERS
     //////////////////////////////////////////////////////////////*/
     /// @dev Modifier that only allows the owner to call the function
     modifier onlyOwner() {
-        if (msg.sender == owner) {
-            _;
-        } else revert NotOwner();
+        if (msg.sender != owner) revert NotOwner();
+        _;
     }
 
     /// @dev Modifier that checks if a contract exists in the mapping
     modifier contractMustExist(address _contract) {
-        if (bytes(contractToDescriptionMaping[_contract]).length > 0) {
-            _;
-        } else revert ContractNotExist();
+        if (bytes(contractToDescriptionMaping[_contract]).length == 0)
+            revert ContractNotExist();
+        _;
     }
 
     /// @notice Initializes a new instance of the ContractManager with the specified owner.
     /// @param _owner The address that will be granted ownership of this contract instance.
     constructor(address _owner) {
+        if (_owner == address(0)) revert CannotBeZeroAddress();
         owner = _owner;
     }
 
@@ -83,15 +86,16 @@ contract ContractManager {
         address _contract,
         string memory _description
     ) external onlyOwner contractMustExist(_contract) {
+        if (bytes(_description).length == 0) {
+            revert CannotSetToEmpty();
+        }
         if (
             keccak256(bytes(contractToDescriptionMaping[_contract])) ==
             keccak256(bytes(_description))
         ) {
             revert StaleDescription();
         }
-        if (bytes(_description).length == 0) {
-            revert CannotSetToEmpty();
-        }
+
         _insertContractDescription(_contract, _description);
         emit ContractDescriptionUpdated(_contract, _description);
     }

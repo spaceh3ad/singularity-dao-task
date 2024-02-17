@@ -1,6 +1,6 @@
-# ContractManager Tests
+# ContractManager Unit Tests
 
-This documentation covers the tests for the `ContractManager` smart contract. The tests are designed to verify the functionality and security of contract operations, including adding, updating, and removing contract descriptions, as well as handling permissions.
+This documentation covers the tests for the `ContractManager` smart contract. The tests are designed to verify the functionality of contract operations, including adding, updating, and removing contract descriptions, as well as handling permissions.
 
 ## Test Setup
 

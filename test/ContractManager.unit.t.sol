@@ -8,7 +8,7 @@ import {MultisigContract} from "../src/MultisigContract.sol";
 /// @author Jan Kwiatkowski @spaceh3ad
 /// @title Test Suite for ContractManager
 /// @dev This contract tests the ContractManager's functionality including adding, updating, and removing contract descriptions.
-contract ContractManagerTest is Test {
+contract ContractManagerUnitTest is Test {
     ContractManager public contractManager;
 
     address owner = address(0x03e80);
@@ -90,6 +90,11 @@ contract ContractManagerTest is Test {
                                 REVERT SCENARIOS
     //////////////////////////////////////////////////////////////*/
 
+    function test_initNullOwner() public {
+        vm.expectRevert(ContractManager.CannotBeZeroAddress.selector);
+        new ContractManager(address(0));
+    }
+
     /// @notice Verifies that non-privileged users cannot remove a contract description
     function test_removeContractDescriptionNonPrivileged() public {
         test_addContractDescription();
@@ -121,7 +126,7 @@ contract ContractManagerTest is Test {
     }
 
     /// @notice Tests the revert scenario when trying to update a contract description to an empty string
-    function test_revertUpdate_contractDoesNotExist() public {
+    function test_revertUpdate_contractDescriptionIsEmpty() public {
         test_addContractDescription();
 
         vm.prank(owner);
@@ -130,7 +135,7 @@ contract ContractManagerTest is Test {
     }
 
     /// @notice Verifies that updating a non-existent contract's description reverts as expected
-    function test_revertUpdate_contractDescriptionIsEmpty() public {
+    function test_revertUpdate_contractDoesNotExist() public {
         test_addContractDescription();
 
         vm.prank(owner);

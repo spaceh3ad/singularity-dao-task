@@ -1,4 +1,4 @@
-# MultisigContract Tests
+# MultisigContract Unit Tests
 
 This documentation details the tests for the `MultisigContract` smart contract. These tests are aimed at verifying the core functionalities of the multisignature mechanism, including proposing, approving, and executing actions, as well as handling permissions and error scenarios.
 
@@ -22,7 +22,7 @@ The setup involves initializing a `MultisigContract` with four owners (Alice, Bo
 
 ### Execute Action
 
-- **`test_executeAction`**: Demonstrates that once the required number of approvals is reached, the action is executed and then removed from the list of pending actions, effectively clearing the execution data associated with that action ID.
+- **`test_executeAction`**: Demonstrates that once the required number of approvals is reached, it emits `ActionExecuted` event and the action is executed and then removed from the list of pending actions, effectively clearing the execution data associated with that action ID.
 
 ## Revert Scenarios
 
@@ -38,6 +38,6 @@ The setup involves initializing a `MultisigContract` with four owners (Alice, Bo
 
 - **`test_approveActionTwice`**: Confirms that an owner cannot approve an action more than once, expecting an `AleadyApproved` error.
 
-### Invalid Action Approval
+### Non-existant Action Approval
 
-- **`test_approveInvalidAction`**: Checks that attempting to approve a non-existent action ID results in a revert, expecting an `ActionDoesNotExist` error.
+- **`test_approveNonExistantAction`**: Checks that attempting to approve a non-existent action ID results in a revert, expecting an `ActionDoesNotExist` error.

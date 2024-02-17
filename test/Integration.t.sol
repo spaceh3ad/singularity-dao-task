@@ -60,10 +60,10 @@ contract Integration is Test {
         multisig.approveAction(_actionId);
 
         vm.expectEmit(true, false, false, true);
-        emit ContractDescriptionAdded(someContractAddress, desc);
+        emit ActionExecuted(_actionId);
 
         vm.expectEmit(true, false, false, true);
-        emit ActionExecuted(_actionId);
+        emit ContractDescriptionAdded(someContractAddress, desc);
 
         vm.prank(eve);
         multisig.approveAction(_actionId);
@@ -87,10 +87,10 @@ contract Integration is Test {
         multisig.approveAction(_actionId);
 
         vm.expectEmit(true, false, false, true);
-        emit ContractDescriptionUpdated(someContractAddress, desc);
+        emit ActionExecuted(_actionId);
 
         vm.expectEmit(true, false, false, true);
-        emit ActionExecuted(_actionId);
+        emit ContractDescriptionUpdated(someContractAddress, desc);
 
         vm.prank(eve);
         multisig.approveAction(_actionId);
@@ -116,9 +116,11 @@ contract Integration is Test {
         multisig.approveAction(_actionId);
 
         vm.expectEmit(true, false, false, true);
-        emit ContractDescriptionRemoved(someContractAddress);
-        vm.expectEmit(true, false, false, true);
         emit ActionExecuted(_actionId);
+
+        vm.expectEmit(true, false, false, true);
+        emit ContractDescriptionRemoved(someContractAddress);
+
         vm.prank(eve);
         multisig.approveAction(_actionId);
 
@@ -127,6 +129,32 @@ contract Integration is Test {
             ""
         );
     }
+
+    /// @notice Tests the scenario of failed execution of a proposed action
+    /// @dev This function simulates the scenario where an action proposed by an owner is approved, but execution fails due to an error at the contract manager level.
+    function test_failedExecution() public {
+        uint256 _actionId = proposeAction(
+            contractManager.removeContractDescription.selector,
+            someContractAddress,
+            ""
+        );
+
+        vm.prank(alice);
+        multisig.approveAction(_actionId);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MultisigContract.ExecutionFailed.selector,
+                _actionId
+            )
+        );
+        vm.prank(eve);
+        multisig.approveAction(_actionId);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                HELPERS
+    //////////////////////////////////////////////////////////////*/
 
     /// @dev Proposes and approves an action with given parameters.
     /// @param _selector The function selector of the action to be proposed.
@@ -151,7 +179,9 @@ contract Integration is Test {
         return uint256(keccak256(data));
     }
 
-    /// Encodes parameters for adding a contract description.
+    /// @dev Encodes parameters for adding a contract description.
+    /// @param _contract The contract address related to the action.
+    /// @param _description The description for the action.
     function encodeAdd(
         address _contract,
         string memory _description
@@ -164,7 +194,9 @@ contract Integration is Test {
             );
     }
 
-    /// Encodes parameters for updating a contract description.
+    /// @dev Encodes parameters for updating a contract description.
+    /// @param _contract The contract address related to the action.
+    /// @param _description The description for the action.
     function encodeUpdate(
         address _contract,
         string memory _description
@@ -177,7 +209,8 @@ contract Integration is Test {
             );
     }
 
-    /// Encodes parameters for removing a contract description.
+    /// @dev Encodes parameters for removing a contract description.
+    /// @param _contract contract address that description will be removed.
     function encodeRemove(
         address _contract
     ) public pure returns (bytes memory) {

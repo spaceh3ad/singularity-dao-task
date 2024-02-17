@@ -14,18 +14,27 @@ contract MultisigContract {
 
     /// @dev Thrown when an unauthorized user attempts to perform an operation reserved for owners.
     error NotOwner();
+
     /// @dev Thrown when an action does not have the required number of approvals to be executed.
     error NotEnoughApprovals();
+
     /// @dev Thrown when an attempt to execute an action fails at the ContractManager level.
     error ExecutionFailed(uint256 actionId);
+
     /// @dev Thrown when an action being approved does not exist in the contract.
     error ActionDoesNotExist();
+
     /// @dev Thrown when a proposed action already exists.
     error ActionExists();
+
     /// @dev Thrown when an owner tries to approve an action they have already approved.
     error AleadyApproved();
+
     /// @dev Thrown when an action is proposed with an invalid selector.
     error InvalidSelector();
+
+    /// @dev Error used when an attempt is made to set the owner to the zero address.
+    error CannotBeZeroAddress();
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -52,10 +61,10 @@ contract MultisigContract {
     mapping(address => bool) public isOwner;
 
     /// @dev Assumes the contract will have no more than 255 owners.
-    uint8 public approvalThreshold;
+    uint8 public immutable approvalThreshold;
 
     /// @notice The ContractManager contract used to execute actions.
-    ContractManager public contractManager;
+    ContractManager public immutable contractManager;
 
     struct Action {
         bytes executionData;
@@ -83,6 +92,8 @@ contract MultisigContract {
     /// @param _approvalThreshold Number of approvals required for an action to be executed.
     constructor(address[] memory _owners, uint8 _approvalThreshold) {
         for (uint256 i = 0; i < _owners.length; i++) {
+            if (_owners[i] == address(0)) revert CannotBeZeroAddress();
+
             isOwner[_owners[i]] = true;
         }
         approvalThreshold = _approvalThreshold;
@@ -146,9 +157,9 @@ contract MultisigContract {
     /// @param _actionId The unique identifier of the action to execute.
     /// @param _data The execution data of the action.
     function execute(uint256 _actionId, bytes memory _data) internal {
+        emit ActionExecuted(_actionId);
         (bool success, ) = address(contractManager).call(_data);
         if (!success) revert ExecutionFailed(_actionId);
-        emit ActionExecuted(_actionId);
     }
 
     /*//////////////////////////////////////////////////////////////

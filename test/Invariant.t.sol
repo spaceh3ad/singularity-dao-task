@@ -36,7 +36,7 @@ contract Invariant is Test {
 
     /// Validates that only specific actions related to contract management can be proposed.
     /// @dev Asserts that any proposed action's selector must match one of the ContractManager's allowed actions.
-    function invariant_actionProposal() public view {
+    function testInvariant_actionProposal() public view {
         (bytes memory executionData, ) = multisig.pendingActions(12345);
         if (executionData.length > 0) {
             bytes4 selector = getSelector(executionData);
@@ -52,7 +52,7 @@ contract Invariant is Test {
 
     /// Ensures that valid actions contain non-empty execution data.
     /// @dev Checks for the presence of execution data in actions with more than one approval, ensuring actions are properly defined before execution.
-    function invariant_executionDataNotEmpty() public view {
+    function testInvariant_executionDataNotEmpty() public view {
         (bytes memory executionData, uint8 approvals) = multisig.pendingActions(
             12345
         );

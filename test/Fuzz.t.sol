@@ -7,22 +7,25 @@ import "forge-std/Test.sol";
 import "../src/ContractManager.sol";
 
 /// @author Jan Kwiatkowski @spaceh3ad
-/// @title Fuzz Testing for ContractManager
-/// @dev This contract performs fuzz testing on the ContractManager's functions to ensure they handle a wide range of inputs correctly.
-contract ContractManagerFuzz is Test {
+/// @title Fuzz Testing for ContractManager and MultisigContract
+/// @dev This contract performs fuzz testing on the ContractManager's functions to ensure they handle a wide range of inputs correctly as well as some MultisigContract functions.
+contract Fuzz is Test {
+    MultisigContract public multisig;
     ContractManager public manager;
-    address public owner;
-    address public nonOwner;
 
-    /// @notice Sets up the testing environment by deploying the ContractManager and initializing owner and nonOwner addresses.
+    address bob = address(0xb0b);
+
+    /// @notice Sets up the testing environment by deploying the ContractManager and initializing multisig and nonOwner addresses.
     function setUp() public {
-        owner = address(1);
-        nonOwner = address(2);
-        manager = new ContractManager(owner);
+        address[] memory owners = new address[](1);
+        owners[0] = bob;
+
+        multisig = new MultisigContract(owners, 1);
+        manager = ContractManager(multisig.contractManager());
     }
 
     /// @notice Fuzz test for adding a new contract description.
-    /// @dev This test checks that a contract description can be added successfully by the owner.
+    /// @dev This test checks that a contract description can be added successfully by the multisig.
     /// @param _contract The address of the contract (fuzzed) to add a description for.
     /// @param _description The description to add for the contract.
     function testFuzz_addContractDescription(
@@ -34,7 +37,7 @@ contract ContractManagerFuzz is Test {
 
         vm.assume(bytes(_description).length > 0); // Assume description is not empty
 
-        vm.prank(owner); // Simulate actions from the owner's address
+        vm.prank(address(multisig)); // Simulate actions from the multisig's address
         manager.addContractDescription(contractAddress, _description);
 
         // Verify the contract description was added
@@ -46,7 +49,7 @@ contract ContractManagerFuzz is Test {
     }
 
     /// @notice Fuzz test for updating an existing contract description.
-    /// @dev This test verifies that an existing contract description can be updated successfully by the owner.
+    /// @dev This test verifies that an existing contract description can be updated successfully by the multisig.
     /// @param _contract The address of the contract (fuzzed) to update the description for.
     /// @param _description The initial description to add for the contract.
     /// @param _newDescription The new description to update the contract with.
@@ -67,7 +70,7 @@ contract ContractManagerFuzz is Test {
             keccak256(bytes(_description)) != keccak256(bytes(_newDescription))
         );
 
-        vm.startPrank(owner);
+        vm.startPrank(address(multisig)); // Simulate actions from the multisig's address
         manager.addContractDescription(contractAddress, _description); // First, add a description
         manager.updateContractDescription(contractAddress, _newDescription); // Then, update it
 
@@ -81,7 +84,7 @@ contract ContractManagerFuzz is Test {
     }
 
     /// @notice Fuzz test for removing a contract description.
-    /// @dev This test ensures that a contract description can be removed successfully by the owner.
+    /// @dev This test ensures that a contract description can be removed successfully by the multisig.
     /// @param _contract The address of the contract (fuzzed) to remove the description from.
     /// @param _description The description to add and then remove for the contract.
     function testFuzz_removeContractDescription(
@@ -93,7 +96,7 @@ contract ContractManagerFuzz is Test {
 
         vm.assume(bytes(_description).length > 0);
 
-        vm.startPrank(owner);
+        vm.startPrank(address(multisig)); // Simulate actions from the multisig's address
         manager.addContractDescription(contractAddress, _description);
         manager.removeContractDescription(contractAddress);
 
@@ -104,5 +107,14 @@ contract ContractManagerFuzz is Test {
             "Contract description should be removed, resulting in an empty string."
         );
         vm.stopPrank();
+    }
+
+    /// @notice Fuzz test for proposing a new action.
+    /// @dev This test ensures that we cannot approve non-existant action.
+    /// @param _actionId The actionId to be approved.
+    function testFuzz_approveAction(uint256 _actionId) public {
+        vm.expectRevert(MultisigContract.ActionDoesNotExist.selector);
+        vm.prank(bob);
+        multisig.approveAction(_actionId);
     }
 }

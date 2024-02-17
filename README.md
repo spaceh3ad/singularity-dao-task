@@ -1,15 +1,23 @@
 ## Requirements
 
+This repository was build with Foundry
+
 ```
-git clone <this repo>
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
 ```
 
-foundry
+### Clone repository
+
+```
+git clone git@github.com:spaceh3ad/singularity-dao-task.git
+cd singularity-dao-task
+```
 
 ### Build
 
 ```shell
-$ forge build
+forge build
 ```
 
 ### Test & Coverage
@@ -24,7 +32,7 @@ forge coverage
 1. [Slither](https://github.com/crytic/slither)
 
    ```shell
-   slither src/ContractManager.sol --filter-paths /lib
+   slither .
    ```
 
 2. [Aderyn](https://github.com/Cyfrin/aderyn)
@@ -38,18 +46,10 @@ forge coverage
 3. [Mythril](https://github.com/Consensys/mythril)
 
    ```shell
-   ❯ myth analyze --solc-json mythril.solc.json src/ContractManager.sol
+   ❯ myth analyze src/*.sol
    The analysis was completed successfully. No issues were detected.
    ```
 
-## Documentation
+### Documentation
 
-https://book.getfoundry.sh/
-
-## Usage
-
-### Test
-
-```shell
-$ forge test
-```
+Documentation regarding approach and methodology for developing and testing can be found [here](./DOCUMENTATION.md), also more in-depth documentation about test, contract and security analysis can be found in [doc](./doc/)
