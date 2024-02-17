@@ -4,130 +4,81 @@ pragma solidity ^0.8.13;
 import {Test, console} from "forge-std/Test.sol";
 import {ContractManager} from "../src/ContractManager.sol";
 import {MultisigContract} from "../src/MultisigContract.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
 
-contract TestContracts is Test {
+/// @author Jan Kwiatkowski @spaceh3ad
+/// @title Test Suite for ContractManager
+/// @dev This contract tests the ContractManager's functionality including adding, updating, and removing contract descriptions.
+contract ContractManagerTest is Test {
     ContractManager public contractManager;
-    MultisigContract public multisig;
 
-    address alice = address(0xa71ce);
-    address bob = address(0xb0b);
+    address owner = address(0x03e80);
     address eve = address(0xe3e);
-    address john = address(0x01035);
 
-    address other = address(0x07e1);
-
-    // @dev some contract address for description
+    /// Some contract address for description
     address someContractAddress = address(0x8541);
 
+    event ContractDescriptionAdded(
+        address indexed contractAddress,
+        string description
+    );
+    event ContractDescriptionUpdated(
+        address indexed contractAddress,
+        string description
+    );
+    event ContractDescriptionRemoved(address indexed contractAddress);
+
+    /// @notice Sets up the ContractManager contract for testing
     function setUp() public {
-        address[] memory owners = new address[](4);
-        owners[0] = alice;
-        owners[1] = bob;
-        owners[2] = eve;
-        owners[3] = john;
-
-        multisig = new MultisigContract(owners, 3);
-        contractManager = multisig.contractManager();
+        contractManager = new ContractManager(owner);
     }
 
-    ///@dev should allow privileged user to propose action for adding contract description
-    function test_proposeAction_addContractDescription()
-        public
-        returns (uint256)
-    {
-        bytes memory data = multisig.encodeAdd(
-            address(someContractAddress),
-            "some description"
-        );
-        vm.prank(alice);
-        multisig.proposeAction(data);
-        (bytes memory _executionData, uint8 approvals) = multisig
-            .pendingActions(uint256(keccak256(data)));
-
-        assertEq(approvals, 1);
-        assertEq(_executionData, data);
-        return uint256(keccak256(data));
+    /// @notice Verifies the initialization of the ContractManager with the correct owner
+    function test_init() public {
+        assertEq(contractManager.owner(), owner);
     }
 
-    ///@dev should allow privileged user to propose action for updating contract description
-    function test_proposeAction_updateContractDescription() public {
-        bytes memory data = multisig.encodeUpdate(
-            address(someContractAddress),
-            "some new description"
-        );
-        vm.prank(bob);
-        multisig.proposeAction(data);
-        (bytes memory _executionData, uint8 approvals) = multisig
-            .pendingActions(uint256(keccak256(data)));
+    /// @notice Tests adding a contract description by a privileged user
+    /// @dev Simulates adding a contract description and checks if the operation was successful
+    function test_addContractDescription() public {
+        string memory desc = "some description";
 
-        assertEq(approvals, 1);
-        assertEq(_executionData, data);
-    }
-
-    ///@dev should allow privileged user to propose action for removing contract description
-    function test_proposeAction_removeContractDescription() public {
-        bytes memory data = multisig.encodeRemove(address(someContractAddress));
-        vm.prank(eve);
-        multisig.proposeAction(data);
-        (bytes memory _executionData, uint8 approvals) = multisig
-            .pendingActions(uint256(keccak256(data)));
-
-        assertEq(approvals, 1);
-        assertEq(_executionData, data);
-    }
-
-    ///@dev should add contract description after threshold approval reached
-    function test_executeAction_addContractDescription() public {
-        uint256 _actionId = test_proposeAction_addContractDescription();
-        vm.prank(bob);
-        multisig.approveAction(_actionId);
-
-        vm.prank(eve);
-        multisig.approveAction(_actionId);
+        vm.expectEmit(true, false, false, true);
+        emit ContractDescriptionAdded(someContractAddress, desc);
+        vm.prank(owner);
+        contractManager.addContractDescription(someContractAddress, desc);
 
         assertEq(
             contractManager.contractToDescriptionMaping(someContractAddress),
-            "some description"
+            desc
         );
     }
 
-    ///@dev should update contract description after threshold approval reached
-    function test_executeAction_updateContractDescription() public {
-        /// @dev add contract description
-        test_executeAction_addContractDescription();
+    /// @notice Tests updating a contract description by a privileged user
+    /// @dev Simulates updating a contract description and verifies the update
+    function test_updateContractDescription() public {
+        test_addContractDescription();
+        string memory desc = "some new description";
 
-        bytes memory data = multisig.encodeUpdate(
-            address(someContractAddress),
-            "some new description"
-        );
-
-        vm.prank(bob);
-        multisig.proposeAction(data);
-        vm.prank(alice);
-        multisig.approveAction(uint256(keccak256(data)));
-        vm.prank(eve);
-        multisig.approveAction(uint256(keccak256(data)));
+        vm.expectEmit(true, false, false, true);
+        emit ContractDescriptionUpdated(someContractAddress, desc);
+        vm.prank(owner);
+        contractManager.updateContractDescription(someContractAddress, desc);
 
         assertEq(
             contractManager.contractToDescriptionMaping(someContractAddress),
-            "some new description"
+            desc
         );
     }
 
-    ///@dev should remove contract description after threshold approval reached
-    function test_executeAction_removeContractDescription() public {
-        /// @dev add contract description
-        test_executeAction_addContractDescription();
+    /// @notice Tests removing a contract description by a privileged user
+    /// @dev Simulates removing a contract description and checks for deletion
+    function test_removeContractDescription() public {
+        test_addContractDescription();
 
-        bytes memory data = multisig.encodeRemove(address(someContractAddress));
-
-        vm.prank(bob);
-        multisig.proposeAction(data);
-        vm.prank(alice);
-        multisig.approveAction(uint256(keccak256(data)));
-        vm.prank(eve);
-        multisig.approveAction(uint256(keccak256(data)));
+        vm.expectEmit(true, false, false, true);
+        emit ContractDescriptionRemoved(someContractAddress);
+        vm.prank(owner);
+        contractManager.removeContractDescription(someContractAddress);
 
         assertEq(
             contractManager.contractToDescriptionMaping(someContractAddress),
@@ -135,112 +86,70 @@ contract TestContracts is Test {
         );
     }
 
-    ///@dev should revert when actionId does not exist
-    function test_shouldNotAllowApprovingNonExistantAction() public {
-        vm.expectRevert();
-        vm.prank(alice);
-        multisig.approveAction(uint256(keccak256("nonExistantAction")));
+    /*//////////////////////////////////////////////////////////////
+                                REVERT SCENARIOS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Verifies that non-privileged users cannot remove a contract description
+    function test_removeContractDescriptionNonPrivileged() public {
+        test_addContractDescription();
+
+        vm.expectRevert(ContractManager.NotOwner.selector);
+        vm.prank(eve);
+        contractManager.removeContractDescription(someContractAddress);
     }
 
-    ///@dev should revert when owner tries to approve action that he proposed (avoid double counting)
-    function test_shouldNotAllowApprovingOfProposedAction() public {
-        uint256 actionId = test_proposeAction_addContractDescription();
-        vm.expectRevert();
-        vm.prank(alice);
-        multisig.approveAction(actionId);
+    /// @notice Checks that non-privileged users cannot update a contract description
+    function test_updateContractDescriptionNonPrivileged() public {
+        test_addContractDescription();
+
+        vm.expectRevert(ContractManager.NotOwner.selector);
+        vm.prank(eve);
+        contractManager.updateContractDescription(
+            someContractAddress,
+            "something new"
+        );
     }
 
-    ///@dev should revert when owner tries to propose empty action
-    function test_shouldNotAllowProposingEmptyAction() public {
-        vm.expectRevert();
-        vm.prank(alice);
-        bytes memory data = new bytes(0);
-        multisig.proposeAction(data);
+    /// @notice Ensures that non-privileged users cannot add a contract description
+    function test_addContractDescriptionNonPrivileged() public {
+        string memory desc = "some description";
+
+        vm.expectRevert(ContractManager.NotOwner.selector);
+        vm.prank(eve);
+        contractManager.addContractDescription(someContractAddress, desc);
     }
 
-    ///@dev should revert when owner tries to propose action that already exists
-    function test_shouldNotAllowProposingDuplicateAction() public {
-        test_proposeAction_addContractDescription();
-        bytes memory data = multisig.encodeAdd(
-            address(someContractAddress),
+    /// @notice Tests the revert scenario when trying to update a contract description to an empty string
+    function test_revertUpdate_contractDoesNotExist() public {
+        test_addContractDescription();
+
+        vm.prank(owner);
+        vm.expectRevert(ContractManager.CannotSetToEmpty.selector);
+        contractManager.updateContractDescription(someContractAddress, "");
+    }
+
+    /// @notice Verifies that updating a non-existent contract's description reverts as expected
+    function test_revertUpdate_contractDescriptionIsEmpty() public {
+        test_addContractDescription();
+
+        vm.prank(owner);
+        vm.expectRevert(ContractManager.ContractNotExist.selector);
+        contractManager.updateContractDescription(
+            address(0x123456789),
+            "some description updated"
+        );
+    }
+
+    /// @notice Checks revert behavior when attempting to update a contract description to its current value
+    function test_revertUpdate_contractDescriptionIsStale() public {
+        test_addContractDescription();
+
+        vm.prank(owner);
+        vm.expectRevert(ContractManager.StaleDescription.selector);
+        contractManager.updateContractDescription(
+            someContractAddress,
             "some description"
         );
-        vm.expectRevert();
-        vm.prank(alice);
-        multisig.proposeAction(data);
     }
-
-    ///@dev should revert when owner tries to propose action that already exists
-    function test_shouldRevertWhenExecutingActionFails() public {
-        bytes memory data = abi.encodeWithSignature(
-            "deposit(uint256,address)",
-            1000,
-            address(someContractAddress)
-        );
-        vm.prank(alice);
-        multisig.proposeAction(data);
-        vm.prank(bob);
-        multisig.approveAction(uint256(keccak256(data)));
-        vm.expectRevert();
-        vm.prank(eve);
-        multisig.approveAction(uint256(keccak256(data)));
-    }
-
-    // ///@dev should allow privileged user to remove contract with description
-    // function test_removeContractDescription() public {
-    //     test_addContractDescription();
-    //     vm.prank(eve);
-    //     t.removeContractDescription(someContractAddress);
-    //     assertEq(t.contractToDescriptionMaping(someContractAddress), "");
-    // }
-
-    // /*//////////////////////////////////////////////////////////////
-    //                             REVERTS
-    // //////////////////////////////////////////////////////////////*/
-
-    // ///@dev should revert if not privileged user tries to add contract with description
-    // function test_revert_interactContractDescriptionNonPrivileged() public {
-    //     address contractAddress = address(0x8541);
-    //     vm.prank(other);
-    //     vm.expectRevert();
-    //     t.addContractDescription(contractAddress, "some contract");
-    //     vm.expectRevert();
-    //     t.updateContractDescription(contractAddress, "some contract");
-    //     vm.expectRevert();
-    //     t.removeContractDescription(contractAddress);
-    // }
-
-    // ///@dev should allow privileged user to remove contract with description
-    // function test_revert_updateNonExistantContract() public {
-    //     test_addContractDescription();
-    //     vm.prank(bob);
-    //     vm.expectRevert(
-    //         abi.encodeWithSelector(ContractManager.ContractNotExist.selector)
-    //     );
-    //     t.updateContractDescription(address(0x99999999), "");
-    // }
-
-    // ///@dev should revert if description is set to empty
-    // function test_revert_updateContractDescriptionWithEmptyDescription()
-    //     public
-    // {
-    //     test_addContractDescription();
-    //     vm.prank(bob);
-    //     vm.expectRevert(
-    //         abi.encodeWithSelector(ContractManager.CannotSetToEmpty.selector)
-    //     );
-    //     t.updateContractDescription(someContractAddress, "");
-    // }
-
-    // ///@dev should allow privileged user to remove contract with description
-    // function test_revert_updateContractDescriptionWithStaleDescription()
-    //     public
-    // {
-    //     test_addContractDescription();
-    //     vm.prank(bob);
-    //     vm.expectRevert(
-    //         abi.encodeWithSelector(ContractManager.StaleDescription.selector)
-    //     );
-    //     t.updateContractDescription(someContractAddress, "some contract");
-    // }
 }

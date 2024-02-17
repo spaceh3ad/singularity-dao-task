@@ -22,25 +22,53 @@ contract ContractManager {
     error NotOwner();
 
     /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Emitted when a new contract description is added.
+    event ContractDescriptionAdded(
+        address indexed contractAddress,
+        string description
+    );
+    /// @notice Emitted when a contract description is updated.
+    event ContractDescriptionUpdated(
+        address indexed contractAddress,
+        string description
+    );
+    /// @notice Emitted when a contract description is removed.
+    event ContractDescriptionRemoved(address indexed contractAddress);
+
+    /*//////////////////////////////////////////////////////////////
                                 STORAGE
     //////////////////////////////////////////////////////////////*/
 
-    /// @dev Maps contract addresses to their descriptions
+    /// @dev Maps contract addresses to their descriptions.
     mapping(address => string) public contractToDescriptionMaping;
 
-    address public multisigAmin;
+    /// @notice The owner of the contract which is allowed to interact with contract.
+    address public owner;
 
     /*//////////////////////////////////////////////////////////////
                         CONSTRUCTOR & MODIFIERS
     //////////////////////////////////////////////////////////////*/
-    modifier onlyMultiSigAdmin() {
-        if (msg.sender == multisigAmin) {
+    /// @dev Modifier that only allows the owner to call the function
+    modifier onlyOwner() {
+        if (msg.sender == owner) {
             _;
         } else revert NotOwner();
     }
 
-    constructor(address _multisigAmin) {
-        multisigAmin = _multisigAmin;
+    /// @dev Modifier that checks if a contract exists in the mapping
+    modifier contractMustExist(address _contract) {
+        if (bytes(contractToDescriptionMaping[_contract]).length > 0) {
+            _;
+        } else revert ContractNotExist();
+    }
+
+    /// @notice Initializes a new instance of the ContractManager with the specified owner.
+    /// @param _owner The address that will be granted ownership of this contract instance.
+    constructor(address _owner) {
+        owner = _owner;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -54,10 +82,7 @@ contract ContractManager {
     function updateContractDescription(
         address _contract,
         string memory _description
-    ) external onlyMultiSigAdmin {
-        if (bytes(contractToDescriptionMaping[_contract]).length == 0) {
-            revert ContractNotExist();
-        }
+    ) external onlyOwner contractMustExist(_contract) {
         if (
             keccak256(bytes(contractToDescriptionMaping[_contract])) ==
             keccak256(bytes(_description))
@@ -68,6 +93,7 @@ contract ContractManager {
             revert CannotSetToEmpty();
         }
         _insertContractDescription(_contract, _description);
+        emit ContractDescriptionUpdated(_contract, _description);
     }
 
     /// @notice Adds a new contract description
@@ -77,8 +103,9 @@ contract ContractManager {
     function addContractDescription(
         address _contract,
         string memory _description
-    ) external onlyMultiSigAdmin {
+    ) external onlyOwner {
         _insertContractDescription(_contract, _description);
+        emit ContractDescriptionAdded(_contract, _description);
     }
 
     /// @notice Removes a contract description
@@ -86,8 +113,9 @@ contract ContractManager {
     /// @param _contract The address of the contract to remove
     function removeContractDescription(
         address _contract
-    ) external onlyMultiSigAdmin {
+    ) external onlyOwner contractMustExist(_contract) {
         delete contractToDescriptionMaping[_contract];
+        emit ContractDescriptionRemoved(_contract);
     }
 
     /*//////////////////////////////////////////////////////////////

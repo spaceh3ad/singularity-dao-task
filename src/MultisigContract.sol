@@ -3,6 +3,7 @@ pragma solidity 0.8.20;
 
 import "./ContractManager.sol";
 
+/// @author Jan Kwiatkowski @spaceh3ad
 /// @title MultisigContract
 /// @notice Implements a multisignature contract mechanism where actions require multiple approvals from designated owners before they can be executed. This contract is designed to interact with a ContractManager for managing contract descriptions.
 /// @dev The contract utilizes mappings to track ownership, action approvals, and the state of pending actions. Each action is uniquely identified by a hash of its execution data.
@@ -19,12 +20,12 @@ contract MultisigContract {
     error ExecutionFailed(uint256 actionId);
     /// @dev Thrown when an action being approved does not exist in the contract.
     error ActionDoesNotExist();
-    /// @dev Thrown when the execution data for a proposed action is empty.
-    error EmptyExecutionData();
     /// @dev Thrown when a proposed action already exists.
     error ActionExists();
     /// @dev Thrown when an owner tries to approve an action they have already approved.
     error AleadyApproved();
+    /// @dev Thrown when an action is proposed with an invalid selector.
+    error InvalidSelector();
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -32,15 +33,16 @@ contract MultisigContract {
 
     /// @notice Emitted when an action is successfully executed.
     /// @param actionId The unique identifier of the action that was executed.
-    event ActionExecuted(uint256 actionId);
+    event ActionExecuted(uint256 indexed actionId);
 
     /// @notice Emitted when a new action is proposed by an owner.
     /// @param actionId The unique identifier of the proposed action.
-    event ActionProposed(uint256 actionId);
+    /// @param proposer The address of the proposer.
+    event ActionProposed(uint256 indexed actionId, address indexed proposer);
 
     /// @notice Emitted when an owner approves an action.
-    /// @param actionId The unique identifier of the approved action.
-    event ActionApproved(uint256 actionId);
+    /// @param approver The address of the user that approved action.
+    event ActionApproved(uint256 indexed actionId, address indexed approver);
 
     /*//////////////////////////////////////////////////////////////
                                 STORAGE
@@ -93,16 +95,27 @@ contract MultisigContract {
 
     /// @notice Proposes a new action for approval by the contract owners.
     /// @dev Only callable by an owner.
+    /// @dev Reverts if the action already exists or the selector is invalid.
     /// @param _executionData The data to be executed once the action is approved.
-    function proposeAction(bytes memory _executionData) external onlyOwner {
-        if (_executionData.length == 0) revert EmptyExecutionData();
+    function proposeAction(bytes calldata _executionData) external onlyOwner {
+        bytes4 _selector = getSelector(_executionData);
+
+        if (
+            _selector != contractManager.updateContractDescription.selector &&
+            _selector != contractManager.removeContractDescription.selector &&
+            _selector != contractManager.addContractDescription.selector
+        ) {
+            revert InvalidSelector();
+        }
+
         uint256 actionId = uint256(keccak256(_executionData));
         if (pendingActions[actionId].executionData.length > 0)
             revert ActionExists();
+
         pendingActions[actionId] = Action(_executionData, 1);
         actionApprovalMapping[actionId][msg.sender] = true;
 
-        emit ActionProposed(actionId);
+        emit ActionProposed(actionId, msg.sender);
     }
 
     /// @notice Approves an action proposed by an owner.
@@ -117,12 +130,14 @@ contract MultisigContract {
         Action storage action = pendingActions[_actionId];
         action.approvals++;
 
+        bytes memory _executionData = action.executionData;
+
         if (action.approvals < approvalThreshold) {
             actionApprovalMapping[_actionId][msg.sender] = true;
-            emit ActionApproved(_actionId);
+            emit ActionApproved(_actionId, msg.sender);
         } else {
-            execute(_actionId, action.executionData);
             delete pendingActions[_actionId];
+            execute(_actionId, _executionData);
         }
     }
 
@@ -137,46 +152,11 @@ contract MultisigContract {
     }
 
     /*//////////////////////////////////////////////////////////////
-                               HELP VIEWS
+                               HELPER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-
-    /// @notice Encodes parameters for adding a contract description.
-    /// @return bytes The encoded parameters.
-    function encodeAdd(
-        address _contract,
-        string calldata _description
-    ) public pure returns (bytes memory) {
-        return
-            abi.encodeWithSelector(
-                ContractManager.addContractDescription.selector,
-                _contract,
-                _description
-            );
-    }
-
-    /// @notice Encodes parameters for updating a contract description.
-    /// @return bytes The encoded parameters.
-    function encodeUpdate(
-        address _contract,
-        string calldata _description
-    ) public pure returns (bytes memory) {
-        return
-            abi.encodeWithSelector(
-                ContractManager.updateContractDescription.selector,
-                _contract,
-                _description
-            );
-    }
-
-    /// @notice Encodes parameters for removing a contract description.
-    /// @return bytes The encoded parameters.
-    function encodeRemove(
-        address _contract
-    ) public pure returns (bytes memory) {
-        return
-            abi.encodeWithSelector(
-                ContractManager.removeContractDescription.selector,
-                _contract
-            );
+    /// @dev Internal function to extract the selector from a function call.
+    /// @param _func The function call data.
+    function getSelector(bytes calldata _func) internal pure returns (bytes4) {
+        return bytes4((_func));
     }
 }

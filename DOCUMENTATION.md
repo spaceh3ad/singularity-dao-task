@@ -1,4 +1,4 @@
-## Approach
+# Approach
 
 ### Data type for storing descriptions
 
@@ -14,11 +14,17 @@ Since I don't know if the string data stored in the mapping will have a fixed si
 
 ### Access Control
 
-I will rely on implementation from OpenZeppelin since it works out-of-the-box, is well-tested, and allows setting different roles for our smart contract like `ADD_ROLE`, `UPDATE_ROLE`, and `REMOVE_ROLE` to handle different levels of privileges.
+Aderyn scan pointed out centralization issue I dicided to migrate to MultiSig Access Control implementation where each action must reach threshold consensus to be executed on ContractManager.
 
-## Functions
+# Contracts
 
-### `addContractDescription(address contract, string memory description)`
+### ContractManager
+
+### Functions
+
+Each function can only be called by `owner` which is MultisigContract.
+
+##### `addContractDescription(address contract, string memory description)`
 
 #### Purpose:
 
@@ -26,7 +32,7 @@ Adds a new description for a contract.
 
 #### Access Control:
 
-Requires **ADD_ROLE**
+Can only be called by `owner`
 
 #### Parameters:
 
@@ -42,10 +48,6 @@ Inserts the new contract description into the mapping. Does not perform existenc
 #### Purpose:
 
 Updates the description of a specified contract.
-
-#### Access Control:
-
-Requires **UPDATE_ROLE**
 
 #### Parameters:
 
@@ -68,10 +70,6 @@ This function checks for the existence of the contract, ensures the description 
 
 Removes the description of a specified contract.
 
-#### Access Control:
-
-Requires **REMOVE_ROLE**
-
 #### Parameters:
 
 - contract: The address of the contract whose description is to be removed.
@@ -79,6 +77,8 @@ Requires **REMOVE_ROLE**
 #### Implementation Notes:
 
 Deletes the entry for the specified contract from the mapping. Does not revert if the contract does not exist, silently failing instead.
+
+### MultisigContract
 
 ## Testing Approach
 
