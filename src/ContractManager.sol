@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.20;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
-
 /// @author Jan Kwiatkowski @spaceh3ad
 /// @title Contract Manager for Managing Contract Descriptions
-/// @dev Extends OpenZeppelin's AccessControl for role-based permission management
 /// @notice This contract allows for the addition, updating, and removal of contract descriptions, with access control.
-contract ContractManager is AccessControl {
+contract ContractManager {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -15,35 +12,66 @@ contract ContractManager is AccessControl {
     /// @dev Error used when an operation references a contract address that does not exist in the mapping.
     error ContractNotExist();
 
+    /// @dev Error used when an attempt is made to set the owner to the zero address.
+    error CannotBeZeroAddress();
+
     /// @dev Error used when an attempt is made to update a contract's description to the same description it already has.
     error StaleDescription();
 
     /// @dev Error used when an attempt is made to update a contract's description to an empty string.
     error CannotSetToEmpty();
 
+    /// @dev Error used when an operation is attempted by an unauthorized user.
+    error NotOwner();
+
+    /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Emitted when a new contract description is added.
+    event ContractDescriptionAdded(
+        address indexed contractAddress,
+        string description
+    );
+    /// @notice Emitted when a contract description is updated.
+    event ContractDescriptionUpdated(
+        address indexed contractAddress,
+        string description
+    );
+    /// @notice Emitted when a contract description is removed.
+    event ContractDescriptionRemoved(address indexed contractAddress);
+
     /*//////////////////////////////////////////////////////////////
                                 STORAGE
     //////////////////////////////////////////////////////////////*/
 
-    /// @dev Maps contract addresses to their descriptions
+    /// @dev Maps contract addresses to their descriptions.
     mapping(address => string) public contractToDescriptionMaping;
 
-    /// @notice Role hash for the remove operation
-    bytes32 public constant REMOVE_ROLE = keccak256("REMOVE_ROLE");
-
-    /// @notice Role hash for the add operation
-    bytes32 public constant ADD_ROLE = keccak256("ADD_ROLE");
-
-    /// @notice Role hash for the update operation
-    bytes32 public constant UPDATE_ROLE = keccak256("UPDATE_ROLE");
+    /// @notice The owner of the contract which is allowed to interact with contract.
+    address public immutable owner;
 
     /*//////////////////////////////////////////////////////////////
-                              CONSTRUCTOR
+                        CONSTRUCTOR & MODIFIERS
     //////////////////////////////////////////////////////////////*/
+    /// @dev Modifier that only allows the owner to call the function
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert NotOwner();
+        _;
+    }
 
-    /// @dev Grants `DEFAULT_ADMIN_ROLE` to the account that deploys the contract.
-    constructor() {
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    /// @dev Modifier that checks if a contract exists in the mapping
+    modifier contractMustExist(address _contract) {
+        if (bytes(contractToDescriptionMaping[_contract]).length == 0)
+            revert ContractNotExist();
+        _;
+    }
+
+    /// @notice Initializes a new instance of the ContractManager with the specified owner.
+    /// @param _owner The address that will be granted ownership of this contract instance.
+    constructor(address _owner) {
+        if (_owner == address(0)) revert CannotBeZeroAddress();
+        owner = _owner;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -51,15 +79,15 @@ contract ContractManager is AccessControl {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Updates the description of a contract
-    /// @dev Requires `UPDATE_ROLE`; Reverts if the contract does not exist or if the description is stale
+    /// @dev Only callable via MultiSigAdmin
     /// @param _contract The address of the contract to update
     /// @param _description The new description of the contract
     function updateContractDescription(
         address _contract,
         string memory _description
-    ) external onlyRole(UPDATE_ROLE) {
-        if (bytes(contractToDescriptionMaping[_contract]).length == 0) {
-            revert ContractNotExist();
+    ) external onlyOwner contractMustExist(_contract) {
+        if (bytes(_description).length == 0) {
+            revert CannotSetToEmpty();
         }
         if (
             keccak256(bytes(contractToDescriptionMaping[_contract])) ==
@@ -67,30 +95,31 @@ contract ContractManager is AccessControl {
         ) {
             revert StaleDescription();
         }
-        if (bytes(_description).length == 0) {
-            revert CannotSetToEmpty();
-        }
+
         _insertContractDescription(_contract, _description);
+        emit ContractDescriptionUpdated(_contract, _description);
     }
 
     /// @notice Adds a new contract description
-    /// @dev Requires `ADD_ROLE`
+    /// @dev Only callable via MultiSigAdmin
     /// @param _contract The address of the contract
     /// @param _description The description of the contract
     function addContractDescription(
         address _contract,
         string memory _description
-    ) external onlyRole(ADD_ROLE) {
+    ) external onlyOwner {
         _insertContractDescription(_contract, _description);
+        emit ContractDescriptionAdded(_contract, _description);
     }
 
     /// @notice Removes a contract description
-    /// @dev Requires `REMOVE_ROLE`
+    /// @dev Only callable via MultiSigAdmin
     /// @param _contract The address of the contract to remove
     function removeContractDescription(
         address _contract
-    ) external onlyRole(REMOVE_ROLE) {
+    ) external onlyOwner contractMustExist(_contract) {
         delete contractToDescriptionMaping[_contract];
+        emit ContractDescriptionRemoved(_contract);
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -1,162 +1,132 @@
-## Approach
+# Approach
 
 ### Data type for storing descriptions
 
-The best data type would be mapping since it allows key-value storage. It allows quick lookup of data using a unique identifier.
+The best data type would be mapping since it allows key-value storage. It allows quick lookup of data using a unique identifier - address in this case.
 
 ### Determining best data type for mapping
 
 To decide which data type will be most gas-efficient, I will consider different data types including `bytes`, `bytes32`, and `string`.
 
-![alt text](image.png)
+![alt text](img/dt_comparision.png)
 
 Since I don't know if the string data stored in the mapping will have a fixed size, I will only focus on `bytes` and `string`. We can clearly see that `string` performs much better than `bytes`, so I will use this data type in the contract.
 
 ### Access Control
 
-I will rely on implementation from OpenZeppelin since it works out-of-the-box, is well-tested, and allows setting different roles for our smart contract like `ADD_ROLE`, `UPDATE_ROLE`, and `REMOVE_ROLE` to handle different levels of privileges.
+![alt text](img/aderyn.png)
 
-## Functions
+Initially I was thinking about using **OpenZeppelin** implementation, but Aderyn scan pointed out centralization issue, so I dicided to migrate to MultiSig where each action must reach threshold consensus to be executed on ContractManager.
 
-### `addContractDescription(address contract, string memory description)`
+# Contracts
 
-#### Purpose:
+The contracts will be split in 2:
 
-Adds a new description for a contract.
+- **ContractManager** - managing description actions
+- **MultisigContract** - approving and executing actions on ContractManager
 
-#### Access Control:
+### ContractManager
 
-Requires **ADD_ROLE**
+All actions are restricted to owner which is the `MulitsigContract`.
 
-#### Parameters:
+Contract will have following functions for managing contracts descriptions:
 
-- contract: The address of the contract to describe.
-- description: The description of the contract.
+- add
+- update
+- remove
 
-#### Implementation Notes:
+### MultisigContract
 
-Inserts the new contract description into the mapping. Does not perform existence checks, assuming new entries are always valid.
+To simplify deployment MulitsigContract will deploy ContractManager to set itself as owner.
 
-### `updateContractDescription(address contract, string memory description)`
-
-#### Purpose:
-
-Updates the description of a specified contract.
-
-#### Access Control:
-
-Requires **UPDATE_ROLE**
-
-#### Parameters:
-
-- contract: The address of the contract to be updated.
-- description: The new description for the contract.
-
-#### Reverts:
-
-- ContractNotExist: If the contract address does not exist in the mapping.
-- StaleDescription: If the new description matches the current one.
-- CannotSetToEmpty: If the new description is an empty string.
-
-#### Implementation Notes:
-
-This function checks for the existence of the contract, ensures the description is not stale or empty, and updates the description if all checks pass.
-
-### `removeContractDescription(address contract)`
-
-#### Purpose:
-
-Removes the description of a specified contract.
-
-#### Access Control:
-
-Requires **REMOVE_ROLE**
-
-#### Parameters:
-
-- contract: The address of the contract whose description is to be removed.
-
-#### Implementation Notes:
-
-Deletes the entry for the specified contract from the mapping. Does not revert if the contract does not exist, silently failing instead.
+Privileged owners that will be set in constructor will have permission to propose and approve actions that will be executed on `ContractManager`
 
 ## Testing Approach
 
+The tests will be split into 4 categories:
+
+- unit
+- integration
+- fuzz (stateless)
+- invariant (statefull)
+
 ### Unit Tests
 
-1. Add Contract Description:
+#### ContractManager
 
-   - Test adding a contract description with **ADD_ROLE**.
-   - Verify that attempting to add a description without **ADD_ROLE** reverts.
+Initialization and Ownership
 
-2. Update Contract Description:
+- test that the owner is correctly initialized
+- ensure only the owner can perform administrative actions
+- ensure that owner cannot be set to null address
 
-   - Test updating an existing contract's description with **UPDATE_ROLE**.
-   - Verify that updating to the same description reverts with StaleDescription.
-   - Verify that updating a non-existent contract reverts with ContractNotExist.
-   - Verify that updating to an empty description reverts with CannotSetToEmpty.
+Contract Description Management
 
-3. Remove Contract Description:
+- test adding new contract descriptions
+- ensure updating contract descriptions
+- test removing contract descriptions
+- ensure operations are performed by the owner only
+- verify that descriptions cannot be updated with the same description
+- verify that descriptions cannot be set to empty strings
+- verify that descriptions can only be updated for existing contracts
 
-   - Test removing a contract's description with **REMOVE_ROLE**.
-   - Verify that removing a description for a non-existent contract does not revert but has no effect.
+#### MultisigContract
 
-# ContractManager Test Suite
+Initialization and Ownership
 
-## Overview
+- test that owners are correctly initialized
+- ensure that none of the owners is not null address
 
-This test suite is designed to verify the functionality of the `ContractManager` contract using the Foundry test framework.
+Action Proposal
 
-## Test Cases
+- verify that only onwers can propose actions
+- verify that action cannot be proposed twice
+- verify that proposed action has matching selector of actions from ContractManager
 
-### Setup
+Action Approval
 
-- **Function**: `setUp()`
-- **Description**: Initializes the `ContractManager` and assigns roles to test users.
+- verify that proposer cannot approve his action (avoid double counting)
+- verify that action cannot be approved twice by the same owner
+- verify that non-existing action cannot be approved
 
-### Test: Add Contract Description
+Action Execution
 
-- **Function**: `test_addContractDescription()`
-- **Description**: Confirms that a user with `ADD_ROLE` can successfully add a contract description.
-- **Expectation**: The contract description is added, and its retrieval is confirmed.
+- verify that valid actions after reaching threshold are executed
+- verify that action is removed from pending actions after execution
 
-### Test: Update Contract Description
+### Integration Test
 
-- **Function**: `test_updateContractDescription()`
-- **Description**: Ensures that a user with `UPDATE_ROLE` can update a contract's description.
-- **Dependencies**: `test_addContractDescription`
-- **Expectation**: The contract description is updated, and the change is verified.
+Test interactions between the MultisigContract and ContractManager:
 
-### Test: Remove Contract Description
+- verify that after action approval reach threshold they get executed and modify ContractManager state
+- verify that if action execution fails it get cought in MultisigContract
+- ensure contract descriptions are updated correctly in ContractManager after actions are executed in MultisigContract
 
-- **Function**: `test_removeContractDescription()`
-- **Description**: Verifies that a user with `REMOVE_ROLE` can remove a contract's description.
-- **Dependencies**: `test_addContractDescription`
-- **Expectation**: The contract description is removed, and its absence is confirmed.
+### Fuzz Tests
 
-### Test: Non-Privileged Add, Update, Remove
+- ensure ContractManager functions execute correctly
+- enusre `MultisigContract::approveAction()` works correctly
 
-- **Function**: `test_revert_interactContractDescriptionNonPrivileged()`
-- **Description**: Tests that non-privileged users cannot interact with contract descriptions.
-- **Expectation**: Transactions from non-privileged users are reverted as expected.
+### Invariant Tests
 
-### Test: Update Non-Existent Contract
+- ensure that pending proposed action must be one of ContractManager function
+- ensure that pending proposed action does not have empty execution data
 
-- **Function**: `test_revert_updateNonExistantContract()`
-- **Description**: Checks that updating a non-existent contract's description is not allowed.
-- **Dependencies**: `test_addContractDescription`
-- **Expectation**: The transaction is reverted with `ContractNotExist` error selector.
+### Coverage
 
-### Test: Update with Empty Description
+Comprahenive test suite covers 100% code.
 
-- **Function**: `test_revert_updateContractDescriptionWithEmptyDescription()`
-- **Description**: Ensures updating a contract's description to an empty string is not permitted.
-- **Dependencies**: `test_addContractDescription`
-- **Expectation**: The transaction is reverted with `CannotSetToEmpty` error selector.
+![alt text](img/coverage.png)
 
-### Test: Update with Stale Description
+## Security Analysis
 
-- **Function**: `test_revert_updateContractDescriptionWithStaleDescription()`
-- **Description**: Confirms that updating a contract's description to the current description is not allowed.
-- **Dependencies**: `test_addContractDescription`
-- **Expectation**: The transaction is reverted with `StaleDescription` error selector.
+Smart contracts where analysed using:
+
+- Slither - didn't not find any issues, but it pointed out that some vars should be immutalbe so I have made appropriate corrections
+
+- Aderyn - has once again centralization of ownership, but it's has been fixed through Multisig, but apparently Aderyn is lacking context on this.
+- Myth - didn't found any issues.
+
+## Solidity Metrics
+
+Solidity Metrics report has been generated that provides some more detiled overview about the contracts. Including statistics and callgraphs. The report is available [here](/doc/analytics/solidity-metrics.html) and can be viewed by previewing it or opening in web browser.

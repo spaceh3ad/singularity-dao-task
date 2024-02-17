@@ -3,107 +3,158 @@ pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
 import {ContractManager} from "../src/ContractManager.sol";
+import {MultisigContract} from "../src/MultisigContract.sol";
 
-import "@openzeppelin/contracts/utils/Strings.sol";
+/// @author Jan Kwiatkowski @spaceh3ad
+/// @title Test Suite for ContractManager
+/// @dev This contract tests the ContractManager's functionality including adding, updating, and removing contract descriptions.
+contract ContractManagerUnitTest is Test {
+    ContractManager public contractManager;
 
-contract ContractManagerTest is Test {
-    ContractManager public t;
-
-    address alice = address(0xa71ce);
-    address bob = address(0xb0b);
+    address owner = address(0x03e80);
     address eve = address(0xe3e);
 
-    address other = address(0x07e1);
-
-    // @dev some contract address for description
+    /// Some contract address for description
     address someContractAddress = address(0x8541);
 
+    event ContractDescriptionAdded(
+        address indexed contractAddress,
+        string description
+    );
+    event ContractDescriptionUpdated(
+        address indexed contractAddress,
+        string description
+    );
+    event ContractDescriptionRemoved(address indexed contractAddress);
+
+    /// @notice Sets up the ContractManager contract for testing
     function setUp() public {
-        t = new ContractManager();
-        t.grantRole(t.ADD_ROLE(), alice);
-        t.grantRole(t.UPDATE_ROLE(), bob);
-        t.grantRole(t.REMOVE_ROLE(), eve);
+        contractManager = new ContractManager(owner);
     }
 
-    ///@dev should allow privileged user to add contract with description
+    /// @notice Verifies the initialization of the ContractManager with the correct owner
+    function test_init() public {
+        assertEq(contractManager.owner(), owner);
+    }
+
+    /// @notice Tests adding a contract description by a privileged user
+    /// @dev Simulates adding a contract description and checks if the operation was successful
     function test_addContractDescription() public {
-        vm.prank(alice);
-        t.addContractDescription(someContractAddress, "some contract");
+        string memory desc = "some description";
+
+        vm.expectEmit(true, false, false, true);
+        emit ContractDescriptionAdded(someContractAddress, desc);
+        vm.prank(owner);
+        contractManager.addContractDescription(someContractAddress, desc);
+
         assertEq(
-            t.contractToDescriptionMaping(someContractAddress),
-            "some contract"
+            contractManager.contractToDescriptionMaping(someContractAddress),
+            desc
         );
     }
 
-    ///@dev should allow privileged user to update contract with description
+    /// @notice Tests updating a contract description by a privileged user
+    /// @dev Simulates updating a contract description and verifies the update
     function test_updateContractDescription() public {
         test_addContractDescription();
-        vm.prank(bob);
-        t.updateContractDescription(
-            someContractAddress,
-            "some contract updated"
-        );
+        string memory desc = "some new description";
+
+        vm.expectEmit(true, false, false, true);
+        emit ContractDescriptionUpdated(someContractAddress, desc);
+        vm.prank(owner);
+        contractManager.updateContractDescription(someContractAddress, desc);
+
         assertEq(
-            t.contractToDescriptionMaping(someContractAddress),
-            "some contract updated"
+            contractManager.contractToDescriptionMaping(someContractAddress),
+            desc
         );
     }
 
-    ///@dev should allow privileged user to remove contract with description
+    /// @notice Tests removing a contract description by a privileged user
+    /// @dev Simulates removing a contract description and checks for deletion
     function test_removeContractDescription() public {
         test_addContractDescription();
-        vm.prank(eve);
-        t.removeContractDescription(someContractAddress);
-        assertEq(t.contractToDescriptionMaping(someContractAddress), "");
+
+        vm.expectEmit(true, false, false, true);
+        emit ContractDescriptionRemoved(someContractAddress);
+        vm.prank(owner);
+        contractManager.removeContractDescription(someContractAddress);
+
+        assertEq(
+            contractManager.contractToDescriptionMaping(someContractAddress),
+            ""
+        );
     }
 
     /*//////////////////////////////////////////////////////////////
-                                REVERTS
+                                REVERT SCENARIOS
     //////////////////////////////////////////////////////////////*/
 
-    ///@dev should revert if not privileged user tries to add contract with description
-    function test_revert_interactContractDescriptionNonPrivileged() public {
-        address contractAddress = address(0x8541);
-        vm.prank(other);
-        vm.expectRevert();
-        t.addContractDescription(contractAddress, "some contract");
-        vm.expectRevert();
-        t.updateContractDescription(contractAddress, "some contract");
-        vm.expectRevert();
-        t.removeContractDescription(contractAddress);
+    function test_initNullOwner() public {
+        vm.expectRevert(ContractManager.CannotBeZeroAddress.selector);
+        new ContractManager(address(0));
     }
 
-    ///@dev should allow privileged user to remove contract with description
-    function test_revert_updateNonExistantContract() public {
+    /// @notice Verifies that non-privileged users cannot remove a contract description
+    function test_removeContractDescriptionNonPrivileged() public {
         test_addContractDescription();
-        vm.prank(bob);
-        vm.expectRevert(
-            abi.encodeWithSelector(ContractManager.ContractNotExist.selector)
-        );
-        t.updateContractDescription(address(0x99999999), "");
+
+        vm.expectRevert(ContractManager.NotOwner.selector);
+        vm.prank(eve);
+        contractManager.removeContractDescription(someContractAddress);
     }
 
-    ///@dev should revert if description is set to empty
-    function test_revert_updateContractDescriptionWithEmptyDescription()
-        public
-    {
+    /// @notice Checks that non-privileged users cannot update a contract description
+    function test_updateContractDescriptionNonPrivileged() public {
         test_addContractDescription();
-        vm.prank(bob);
-        vm.expectRevert(
-            abi.encodeWithSelector(ContractManager.CannotSetToEmpty.selector)
+
+        vm.expectRevert(ContractManager.NotOwner.selector);
+        vm.prank(eve);
+        contractManager.updateContractDescription(
+            someContractAddress,
+            "something new"
         );
-        t.updateContractDescription(someContractAddress, "");
     }
 
-    ///@dev should allow privileged user to remove contract with description
-    function test_revert_updateContractDescriptionWithStaleDescription()
-        public
-    {
+    /// @notice Ensures that non-privileged users cannot add a contract description
+    function test_addContractDescriptionNonPrivileged() public {
+        string memory desc = "some description";
+
+        vm.expectRevert(ContractManager.NotOwner.selector);
+        vm.prank(eve);
+        contractManager.addContractDescription(someContractAddress, desc);
+    }
+
+    /// @notice Tests the revert scenario when trying to update a contract description to an empty string
+    function test_revertUpdate_contractDescriptionIsEmpty() public {
         test_addContractDescription();
-        vm.prank(bob);
-        vm.expectRevert(
-            abi.encodeWithSelector(ContractManager.StaleDescription.selector)
+
+        vm.prank(owner);
+        vm.expectRevert(ContractManager.CannotSetToEmpty.selector);
+        contractManager.updateContractDescription(someContractAddress, "");
+    }
+
+    /// @notice Verifies that updating a non-existent contract's description reverts as expected
+    function test_revertUpdate_contractDoesNotExist() public {
+        test_addContractDescription();
+
+        vm.prank(owner);
+        vm.expectRevert(ContractManager.ContractNotExist.selector);
+        contractManager.updateContractDescription(
+            address(0x123456789),
+            "some description updated"
         );
-        t.updateContractDescription(someContractAddress, "some contract");
+    }
+
+    /// @notice Checks revert behavior when attempting to update a contract description to its current value
+    function test_revertUpdate_contractDescriptionIsStale() public {
+        test_addContractDescription();
+
+        vm.prank(owner);
+        vm.expectRevert(ContractManager.StaleDescription.selector);
+        contractManager.updateContractDescription(
+            someContractAddress,
+            "some description"
+        );
     }
 }
